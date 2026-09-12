@@ -1,0 +1,16 @@
+# Secrets
+.env
+.env.*
+credentials.json
+*.key
+*.pem
+
+# Local n8n data
+.n8n/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
