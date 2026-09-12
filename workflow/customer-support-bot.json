@@ -1,0 +1,872 @@
+{
+  "name": "Customer Support Ticker Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -1888,
+        16
+      ],
+      "id": "58dc4f31-26e5-43d5-9fd4-dfcd6007f12d",
+      "name": "Telegram Trigger",
+      "webhookId": "d41d955f-aba8-4bd4-a6dc-5def64de2e9d",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5e32313d-6ab3-40a6-ad75-d0ab85d11712",
+              "name": "chat_id",
+              "value": "={{ $json.message?.chat?.id }}",
+              "type": "string"
+            },
+            {
+              "id": "008266a2-de0d-4437-b29f-3ba6d587e9e1",
+              "name": "user_id",
+              "value": "={{ $json.message?.from?.id }}",
+              "type": "string"
+            },
+            {
+              "id": "eb3c3746-f8e3-44d9-a33b-117c4065c111",
+              "name": "username",
+              "value": "={{ $json.message?.from?.username || $json.message?.from?.first_name || 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "e2cc1f44-5370-431f-ad2b-41f73677b9b7",
+              "name": "message",
+              "value": "={{ ($json.message?.text || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "3fc9b4b9-346a-43a9-99ec-ee78582e0962",
+              "name": "message_lower",
+              "value": "={{ ($json.message?.text || '').trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "9185ff31-0b89-495d-8e18-caf2699d425c",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -1520,
+        16
+      ],
+      "id": "c671315d-33c4-441a-9348-25060fada542",
+      "name": "Normalize input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e910588b-cad3-448f-af13-1f65557a2918",
+              "leftValue": "={{ $json.message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1184,
+        16
+      ],
+      "id": "cb534cad-4743-4e57-9c4f-e21749e06de8",
+      "name": "has text?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3d5175cb-aea7-4d07-85c9-11f9f736a0fd",
+              "name": "category",
+              "value": "unsupported",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -928,
+        272
+      ],
+      "id": "2a5c2c91-5ceb-4de7-977c-efae6220a7c7",
+      "name": "Unsupported"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  model: 'gemma4:e2b',\n  stream: false,\n  format: {\n    type: 'object',\n    properties: {\n      category: {\n        type: 'string',\n        enum: ['billing', 'technical', 'general']\n      },\n      confidence: {\n        type: 'number',\n        minimum: 0,\n        maximum: 1\n      },\n      action: {\n        type: 'string',\n        enum: ['none', 'weather']\n      }\n    },\n    required: ['category', 'confidence', 'action'],\n    additionalProperties: false\n  },\n  messages: [\n    {\n      role: 'system',\n      content: `You classify customer support messages.\n\nChoose exactly one category:\n\nbilling:\nPayments, invoices, refunds, subscriptions, charges, pricing or billing problems.\n\ntechnical:\nErrors, bugs, crashes, login problems, connection problems, software problems or other technical issues.\n\ngeneral:\nGeneral questions, greetings, information requests, weather requests, or anything that is not billing or technical.\n\nAlso set action to \"weather\" only when the user is asking about current weather, temperature or weather conditions. Otherwise set action to \"none\".\n\nReturn a confidence number from 0 to 1.\nIf the message is ambiguous, nonsense, or impossible to classify confidently, give it a confidence below 0.60.\n\nReturn only JSON matching the supplied schema.`\n    },\n    {\n      role: 'user',\n      content: $json.message\n    }\n  ],\n  options: {\n    temperature: 0\n  }\n} }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -912,
+        -224
+      ],
+      "id": "67315d07-5c05-4fa5-adf7-12eacef606b6",
+      "name": "classify gemma4",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.category.trim().toLowerCase() }}",
+                    "rightValue": "billing",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "1ec8b493-3df8-46c0-9b9c-f986b42e4cc6"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7738583d-3661-4750-8285-8e2817bd2e2d",
+                    "leftValue": "={{ $json.category.trim().toLowerCase() }}",
+                    "rightValue": "technical",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "814a0c70-de98-41c8-b839-62ac6c87da85",
+                    "leftValue": "={{ $json.category.trim().toLowerCase() }}",
+                    "rightValue": "general",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        -48
+      ],
+      "id": "0e3f9397-f817-47ac-84fe-030d29941241",
+      "name": "Route category"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b22403f7-6824-4a25-9258-c4e5ef9521bc",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "weather",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        160,
+        32
+      ],
+      "id": "edb16729-f06b-4c4d-9862-3e5016488821",
+      "name": "weather request?"
+    },
+    {
+      "parameters": {
+        "url": "https://api.open-meteo.com/v1/forecast",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "latitude",
+              "value": "40.4093"
+            },
+            {
+              "name": "longitude",
+              "value": "49.8671"
+            },
+            {
+              "name": "current",
+              "value": "temperature_2m,apparent_temperature,wind_speed_10m"
+            },
+            {
+              "name": "timezone",
+              "value": "Asia/Baku"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        512,
+        16
+      ],
+      "id": "9909dff7-6f69-4453-a454-3d9c4add8bc3",
+      "name": "get weather",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a16c3a6a-90d2-4857-ad40-b8d075726b3d",
+              "leftValue": "={{ $json.current?.temperature_2m !== undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        736,
+        16
+      ],
+      "id": "3aab240e-3bac-41c6-9228-4ff8b9d2a4e2",
+      "name": "weather API successful?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}\n",
+        "text": "Your billing request has been received. Our billing team will review it shortly.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        288,
+        -656
+      ],
+      "id": "73b7ddac-ebf8-4f1e-923c-af8c1dbaaae5",
+      "name": "Billing reply",
+      "webhookId": "7962ae14-ef1a-417c-944b-810223e0fa00",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}\n",
+        "text": "Your technical issue has been logged. Our technical support team will investigate it.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        -336
+      ],
+      "id": "d7db5f90-5e10-4d70-bdf9-cd854f3a5afe",
+      "name": "Technical reply",
+      "webhookId": "7962ae14-ef1a-417c-944b-810223e0fa00",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}\n",
+        "text": "Thanks for contacting support. Your general request has been received.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        304
+      ],
+      "id": "a6ac2e48-45ff-45e1-9522-533440eed0e0",
+      "name": "general reply",
+      "webhookId": "7962ae14-ef1a-417c-944b-810223e0fa00",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}\n",
+        "text": "I couldn't confidently determine the type of your request. Please rephrase it and provide a little more detail.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        336,
+        704
+      ],
+      "id": "ee8926cb-9ad6-4c4b-9b92-7f731dd501e2",
+      "name": "fallback reply",
+      "webhookId": "7962ae14-ef1a-417c-944b-810223e0fa00",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Telegram Input & Validation\n\nReceives incoming Telegram messages, normalizes the user/message\nfields, and checks whether the request contains text.\n\nNon-text messages are routed to the Unsupported path.",
+        "width": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1568,
+        -176
+      ],
+      "id": "71bfd57c-daad-4154-a3f6-1865f52b32e9",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Local AI Classification\n\nMessages are classified by Gemma 4 running locally through Ollama.\n\nAllowed categories:\n- billing\n- technical\n- general\n\nThe model also returns confidence and an optional action.\nLow-confidence or invalid AI responses are converted to\n\"unrecognized\"."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -992,
+        -432
+      ],
+      "id": "e71aee59-a07d-40d2-b46a-6990a282daa3",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "AI Category Routing\n\nThe Switch node routes using the category returned by Gemma.\nNo hardcoded message keywords are used for category routing.\n\nBranches:\n- Billing\n- Technical\n- General\n- Fallback"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -288,
+        -304
+      ],
+      "id": "c203b991-0e11-452e-a350-bdc50e029075",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Ticket Logging\n\nEvery request is logged to Google Sheets with:\ntimestamp, user_id, username, AI category,\nconfidence, and original message."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        320
+      ],
+      "id": "a3305ebd-98c5-47ac-afaa-81179adbe653",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "External API Integration\n\nGeneral weather requests call the Open-Meteo REST API.\n\nThe workflow checks whether the API succeeded before replying.\nAPI failures return a graceful error message instead of\nstopping the workflow."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        192
+      ],
+      "id": "25836c19-f4d8-47d9-a199-537a09e0c276",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "chatId": "6314792573",
+        "text": "=New technical support ticket\n\nUser: {{ $json.username }}\nUser ID: {{ $json.user_id }}\n\nMessage:\n{{ $json.message }}\n\nAI confidence: {{ $json.confidence }}\n\nTimestamp: {{ $json.timestamp }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        -176
+      ],
+      "id": "8821d3b3-5e5b-4d26-a24b-f571487464c5",
+      "name": "Admin Technical Notification",
+      "webhookId": "2bf9c8f5-a10b-49da-9ffc-d50faf13b15a",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1vwTrsZpGFznsJESmB7vGsjp6T38qvk0eDNClUsDlDw8",
+          "mode": "list",
+          "cachedResultName": "customer support logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vwTrsZpGFznsJESmB7vGsjp6T38qvk0eDNClUsDlDw8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1vwTrsZpGFznsJESmB7vGsjp6T38qvk0eDNClUsDlDw8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $json.timestamp }}",
+            "user_id": "={{ $json.user_id }}",
+            "username": "={{ $json.username }}",
+            "category": "={{ $json.category }}",
+            "confidence": "={{ $json.confidence }}",
+            "original message": "={{ $json.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "user_id",
+              "displayName": "user_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "original message",
+              "displayName": "original message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -352,
+        512
+      ],
+      "id": "5f571363-9084-4c3b-ac18-9f2001ad1966",
+      "name": "Logs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "9zqAKiVdy73c7XEh",
+          "name": "sheets local"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse ai output').first().json.chat_id }}",
+        "text": "Sorry, the weather service is currently unavailable. Please try again later.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        176
+      ],
+      "id": "7ede5442-141b-44b4-9d54-ae8ce7ab662b",
+      "name": "Weather message false",
+      "webhookId": "2236c29c-befb-4e8a-9cc9-b77d99cee73e",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse ai output').first().json.chat_id }}",
+        "text": "=Current weather in Baku:  Temperature: {{ $json.current.temperature_2m }} °C Feels like: {{ $json.current.apparent_temperature }} °C Wind speed: {{ $json.current.wind_speed_10m }} km/h",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1168,
+        -144
+      ],
+      "id": "af4a0da1-d7ee-43ce-bf8d-e99de8a7f4ab",
+      "name": "Weather message true",
+      "webhookId": "b96c0b78-42e2-4d4e-8090-a4bab7fad89b",
+      "credentials": {
+        "telegramApi": {
+          "id": "LIsJgFQOfun6fWsr",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $('Normalize input').first().json;\n\nconst raw = $json?.message?.content ?? '';\n\nconst allowedCategories = [\n  'billing',\n  'technical',\n  'general'\n];\n\nconst allowedActions = [\n  'none',\n  'weather'\n];\n\nlet aiCategory = null;\nlet category = 'unrecognized';\nlet confidence = 0;\nlet action = 'none';\nlet aiOk = false;\n\ntry {\n  const parsed =\n    typeof raw === 'string'\n      ? JSON.parse(raw)\n      : raw;\n\n  if (allowedCategories.includes(parsed.category)) {\n    aiCategory = parsed.category;\n  }\n\n  if (Number.isFinite(Number(parsed.confidence))) {\n    confidence = Number(parsed.confidence);\n  }\n\n  if (allowedActions.includes(parsed.action)) {\n    action = parsed.action;\n  }\n\n  if (\n    aiCategory !== null &&\n    confidence >= 0.60\n  ) {\n    category = aiCategory;\n    aiOk = true;\n  }\n\n} catch (error) {\n  category = 'unrecognized';\n  confidence = 0;\n  aiOk = false;\n}\n\nreturn [\n  {\n    json: {\n      ...original,\n      category,\n      ai_category: aiCategory,\n      confidence,\n      action,\n      ai_ok: aiOk,\n      ai_raw: raw\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        -32
+      ],
+      "id": "89dd5fab-bae5-4f01-8fd8-9b38e8ccfe76",
+      "name": "Parse ai output"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize input": {
+      "main": [
+        [
+          {
+            "node": "has text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "has text?": {
+      "main": [
+        [
+          {
+            "node": "classify gemma4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "classify gemma4": {
+      "main": [
+        [
+          {
+            "node": "Parse ai output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route category": {
+      "main": [
+        [
+          {
+            "node": "Billing reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Technical reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Admin Technical Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "weather request?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "fallback reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported": {
+      "main": [
+        [
+          {
+            "node": "Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "weather request?": {
+      "main": [
+        [
+          {
+            "node": "get weather",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "general reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get weather": {
+      "main": [
+        [
+          {
+            "node": "weather API successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "weather API successful?": {
+      "main": [
+        [
+          {
+            "node": "Weather message true",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weather message false",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse ai output": {
+      "main": [
+        [
+          {
+            "node": "Route category",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Logs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ccf13f9a-50a1-49aa-8bfe-9086f8e3db9a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0226868e093fba0b8b2fd4aee0b90df5fac77e395599de15b64f9a4463bae82b"
+  },
+  "nodeGroups": [],
+  "id": "92xxJiDQk9YloeMD",
+  "tags": []
+}
